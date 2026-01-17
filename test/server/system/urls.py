@@ -22,7 +22,7 @@ from django.urls import include, path
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/client_update/", include("nuitkal_pack_server.urls")),
+    path("api/nuitkal_pack/", include("nuitkal_pack_server.urls")),
 ]
 
 # 开发环境下提供媒体文件服务

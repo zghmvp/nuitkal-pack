@@ -172,7 +172,7 @@ class UpdaterManager:
 
     使用示例:
         config = UpdaterConfig(
-            api_check='http://localhost:8000/api/client_update/check/',
+            api_check='http://localhost:8000/api/nuitkal_pack/check/',
             client_dir=Path('client')
         )
         updater = UpdaterManager(config)
@@ -682,7 +682,7 @@ class UpdaterManager:
 if __name__ == "__main__":
     # 创建更新器配置
     config = UpdaterConfig(
-        check_api_url="http://localhost:8000/api/client_update/check/",  # 服务端地址
+        check_api_url="http://localhost:8000/api/nuitkal_pack/check/",  # 服务端地址
         client_dir=Path(__file__).parent,
     )
 

@@ -119,7 +119,7 @@ class ClientVersion(models.Model):
         db_index=True,  # 添加索引以提高查询性能
     )
     version = models.CharField(max_length=50, verbose_name="版本号", help_text="语义化版本号,如 1.0.1")
-    file = models.FileField(max_length=255, upload_to="client_updates/%Y/%m/", verbose_name="文件路径", help_text="ZIP 格式的更新包文件", validators=[validate_zip_file])
+    file = models.FileField(max_length=255, upload_to="nuitkal_packs/%Y/%m/", verbose_name="文件路径", help_text="ZIP 格式的更新包文件", validators=[validate_zip_file])
     entry_point = models.CharField(
         max_length=255,
         default="main.py",

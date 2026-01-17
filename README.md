@@ -36,7 +36,7 @@
 
 ### 1. 安装
 ```
-pip install git+https://github.com/zghmvp/zghmvp_client_update.git
+pip install git+https://github.com/zghmvp/nuitkal_pack_server.git
 ```
 
 或克隆本项目后进入根目录执行
@@ -78,7 +78,7 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     ...
-    path("api/client_update/", include("nuitkal_pack_server.urls")),
+    path("api/nuitkal_pack/", include("nuitkal_pack_server.urls")),
 ]
 
 # 开发环境下需要添加媒体文件路由
@@ -106,49 +106,19 @@ python manage.py createsuperuser
 ### 1. 检查最新版本
 
 ```http
-GET /api/client_update/check/
-```
-
-**响应示例:**
-
-```json
-{
-  "version": "1.0.1",
-  "download_url": "http://localhost:8000/media/client_updates/2025/01/update_1.0.1.zip",
-  "file_hash": "a1b2c3d4e5f6...",
-  "file_size": 1048576,
-  "changelog": "修复了若干bug\n优化了性能",
-  "upload_time": "2025-01-14T12:00:00Z"
-}
+GET /api/nuitkal_pack/check/
 ```
 
 ### 2. 获取所有版本列表
 
 ```http
-GET /api/client_update/versions/
-```
-
-**响应示例:**
-
-```json
-[
-  {
-    "version": "1.0.1",
-    "file_path": "/media/client_updates/2025/01/update_1.0.1.zip",
-    "file_size": 1048576,
-    "file_hash": "a1b2c3d4e5f6...",
-    "upload_time": "2025-01-14T12:00:00Z",
-    "changelog": "修复了若干bug",
-    "is_active": true,
-    "download_url": "http://localhost:8000/media/client_updates/2025/01/update_1.0.1.zip"
-  }
-]
+GET /api/nuitkal_pack/versions/
 ```
 
 ### 3. 上传新版本
 
 ```http
-POST /api/client_update/upload/
+POST /api/nuitkal_pack/upload/
 Content-Type: multipart/form-data
 ```
 
@@ -167,7 +137,7 @@ Content-Type: multipart/form-data
 {
   "message": "版本上传成功",
   "version": "1.0.1",
-  "download_url": "http://localhost:8000/media/client_updates/2025/01/update_1.0.1.zip",
+  "download_url": "http://localhost:8000/media/nuitkal_packs/2025/01/update_1.0.1.zip",
   "file_hash": "a1b2c3d4e5f6...",
   "file_size": 1048576,
   "is_active": true
@@ -177,7 +147,7 @@ Content-Type: multipart/form-data
 ### 4. 设置激活版本
 
 ```http
-POST /api/client_update/set_active/{version}/
+POST /api/nuitkal_pack/set_active/{version}/
 ```
 
 **响应示例:**
@@ -195,7 +165,7 @@ POST /api/client_update/set_active/{version}/
 
 ```python
 from pathlib import Path
-from zghmvp_client_update_client import ClientUpdater, UpdaterConfig
+from nuitkal_pack import ClientUpdater, UpdaterConfig
 
 
 def progress_callback(downloaded: int, total: int) -> None:
@@ -211,7 +181,7 @@ def main():
     """启动器主函数"""
     # 创建更新器配置
     config = UpdaterConfig(
-        check_api_url="http://localhost:8000/api/client_update/check/",  # 服务端检查版本接口
+        check_api_url="http://localhost:8000/api/nuitkal_pack/check/",  # 服务端检查版本接口
         client_dir=Path("client").resolve(),  # 客户端程序目录
         main_script="main.py",  # 主程序入口文件
     )
@@ -231,7 +201,7 @@ if __name__ == "__main__":
 
 ### 配置参数说明
 
-[UpdaterConfig](zghmvp_client_update_client/client.py#L120) 主要配置参数:
+[UpdaterConfig](nuitkal_pack/client.py#L120) 主要配置参数:
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|

@@ -2,8 +2,8 @@ from nuitkal_pack import UpdaterConfig, UpdaterManager
 
 # 创建更新器配置
 config = UpdaterConfig(
-    check_api_url="http://ps.19970128.xyz/api/client_update/apps/e8d0ad0cf6e84c73b0918b18c0c98a95/active/",  # 服务端地址
-    # check_api_url="http://127.0.0.1:8000/api/client_update/apps/bd1bf1b1fb68477cb18338348302046c/active/",  # 服务端地址
+    check_api_url="http://ps.19970128.xyz/api/nuitkal_pack/apps/e8d0ad0cf6e84c73b0918b18c0c98a95/active/",  # 服务端地址
+    # check_api_url="http://127.0.0.1:8000/api/nuitkal_pack/apps/bd1bf1b1fb68477cb18338348302046c/active/",  # 服务端地址
 )
 
 
