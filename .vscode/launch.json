@@ -1,0 +1,28 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Test Server",
+            "type": "debugpy",
+            "request": "launch",
+            "args": [
+                "runserver"
+            ],
+            "django": true,
+            "autoStartBrowser": false,
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}\\manage.py"
+        },
+        {
+            "name": "Text Client",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\test-client.py",
+            "args": [
+                "runserver",
+                "10000"
+            ],
+            "console": "integratedTerminal"
+        }
+    ]
+}
