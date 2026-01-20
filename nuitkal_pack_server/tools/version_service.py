@@ -28,9 +28,9 @@ class VersionService:
         if obj:
             return obj
 
-        file = VersionFile(id=hash_id, name=name, size=file.size, file=file)
-        file.save()
-        return file
+        obj = VersionFile(id=hash_id, name=name, size=file.size, file=file)
+        obj.save()
+        return obj
 
     @staticmethod
     def create_version(app: App, *, version: str, entry_point: str, file_manifest: dict[str, str], changelog: str = "", is_active: bool = False) -> AppVersion:
