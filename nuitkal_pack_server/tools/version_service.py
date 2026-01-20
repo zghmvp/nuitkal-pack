@@ -24,9 +24,9 @@ class VersionService:
         hash_id = calculate_file_hash(file.read())
         name = file.name
 
-        file = VersionFile.objects.filter(id=hash_id).first()
-        if file:
-            return file
+        obj = VersionFile.objects.filter(id=hash_id).first()
+        if obj:
+            return obj
 
         file = VersionFile(id=hash_id, name=name, size=file.size, file=file)
         file.save()

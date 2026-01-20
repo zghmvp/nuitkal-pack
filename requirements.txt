@@ -10,6 +10,8 @@ Pillow==12.1.0
 
 # 客户端 SDK 依赖
 requests==2.32.3
+diskcache
+pathspec
 
 # 开发工具
 python-dotenv==1.0.1
