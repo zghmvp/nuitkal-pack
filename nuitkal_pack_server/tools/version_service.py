@@ -96,29 +96,27 @@ class VersionService:
         if not active_version:
             raise ValueError("该应用暂无激活版本")
 
+        local_version = app.appversion_set.filter(version=current_version).first()
+
         result = {
-            "current_version": current_version if current_version else None,
+            "current_version": current_version or None,
             "active_version": active_version.version,
             "entry_point": active_version.entry_point,
             "changelog": active_version.changelog,
+            "need_update": True,
         }
+        if local_version:
+            if current_version == active_version.version:
+                result["need_update"] = False
 
-        if current_version == active_version.version:
-            return dict(
-                result,
-                need_update=False,
-            )
-
-        local_version = app.appversion_set.filter(version=current_version).first()
-
-        # 获取本地版本清单
-        local_manifest = local_version.file_manifest if local_version else {}
+            local_manifest = local_version.file_manifest
+        else:
+            local_manifest = {}
 
         # 计算需要更新的文件
         update_info = active_version.get_all_core_files(local_manifest)
 
         return dict(
             result,
-            need_update=True,
             **update_info,
         )

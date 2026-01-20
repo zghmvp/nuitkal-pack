@@ -134,7 +134,7 @@ class AppViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
 
             VersionService.create_version(app=app, version=version, entry_point=entry_point, changelog=changelog, is_active=is_active, file_manifest=file_manifest)
 
-            App.objects.fiter(id=app.pk).update(updated_at=timezone.now())
+            App.objects.filter(id=app.pk).update(updated_at=timezone.now())
             return Response(
                 {
                     "message": "版本上传成功",
@@ -171,7 +171,7 @@ class AppViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
         else:
             return Response({"error": "file_manifest 必须是字典"}, status=status.HTTP_400_BAD_REQUEST)
 
-        App.objects.fiter(id=app.pk).update(updated_at=timezone.now())
+        App.objects.filter(id=app.pk).update(updated_at=timezone.now())
         return Response(
             {
                 "message": "版本上传成功",
