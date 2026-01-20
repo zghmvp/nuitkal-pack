@@ -1,3 +1,6 @@
+test/server/media/
+test/server/db.sqlite3
+
 # Python
 __pycache__/
 *.py[cod]
