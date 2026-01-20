@@ -1,10 +1,7 @@
 #!/usr/bin/env python
-"""Django's command-line utility for administrative tasks."""
-
 import os
 import sys
 
-# 添加 ../../到运行路径
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
 
 print("====================================")

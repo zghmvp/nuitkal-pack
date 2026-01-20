@@ -1,23 +1,17 @@
-from nuitkal_pack import UpdaterConfig, UpdaterManager
+import os
+import sys
+from pathlib import Path
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+
+
+from nuitkal_pack.client import UpdateClient
 
 # 创建更新器配置
-config = UpdaterConfig(
-    check_api_url="http://ps.19970128.xyz/api/nuitkal_pack/apps/e8d0ad0cf6e84c73b0918b18c0c98a95/active/",  # 服务端地址
-    # check_api_url="http://127.0.0.1:8000/api/nuitkal_pack/apps/bd1bf1b1fb68477cb18338348302046c/active/",  # 服务端地址
+config = UpdateClient(
+    server_url="http://127.0.0.1:8000/api/v1/nuitkal_pack_server/",
+    app_id="b3f0f112-f214-4937-99c8-825ff80a4fd8",
+    local_dir=Path(),
 )
 
-
-# def progress_callback(downloaded: int, total: int) -> None:
-#     if total > 0:
-#         percent = (downloaded / total) * 100
-#         print(f"下载进度: {percent:.1f}% ({downloaded}/{total} bytes)")
-#     else:
-#         print(f"已下载: {downloaded} bytes")
-
-
-# # 使用统一的进度回调工厂
-# config.progress_callback = progress_callback
-
-# 使用上下文管理器确保资源正确释放
-with UpdaterManager(config) as updater:
-    updater.update_and_run()
+config.upload_zip(version="1.0.3", entry_point="main.py", changelog="", is_active=True, file=Path(r"C:\Users\Administrator\Desktop\新建文件夹\1.0.2.zip"), extract_and_upload=True)

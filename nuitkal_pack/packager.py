@@ -1,4 +1,3 @@
-# pyd
 # 全局环境执行安装 nuitka
 # ============= Mac ============= #
 # pip3 install --break-system-packages nuitka
@@ -14,10 +13,11 @@ import subprocess
 import sys
 import zipfile
 from collections import defaultdict
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import MutableMapping, cast, overload
+from typing import Iterator, MutableMapping, cast, overload
 
 import diskcache
 import pathspec
@@ -36,14 +36,15 @@ def calculate_hash(file_path: Path | bytes | str, buffer_size: int = 65536) -> s
 
     Returns:
         文件的MD5哈希值
+
     """
-    md5 = hashlib.md5()
+    md5 = hashlib.sha256()
 
     if isinstance(file_path, str):
         file_path = file_path.encode("utf-8")
 
     if isinstance(file_path, Path):
-        with open(file_path, "rb") as f:
+        with file_path.open("rb") as f:
             for chunk in iter(lambda: f.read(buffer_size), b""):
                 md5.update(chunk)
     else:
@@ -73,22 +74,7 @@ def compile_with_nuitka(
     cache: diskcache.Cache | None = None,
     logger: logging.Logger | None = None,
 ) -> tuple[BuildFile, BuildFile]:
-    """使用Nuitka编译Python文件为.pyd与.pyi文件
-
-    Args:
-        input_file: 输入的.py文件路径
-        build_dir: 构建输出目录
-        options: 编译选项
-        cache: 缓存对象,用于避免重复编译
-        logger: 日志记录器
-
-    Returns:
-        编译后的.pyd与.pyi文件
-
-    Raises:
-        RuntimeError: Nuitka编译失败
-        FileNotFoundError: 生成的.pyi文件不存在
-    """
+    """使用Nuitka编译Python文件为.pyd与.pyi文件"""
     # 使用传入的哈希值或计算新的哈希值
     file_hash = calculate_hash(full_path)
     cache_key = f"nuitka:{full_path}:{file_hash}:{':'.join(options)}"
@@ -97,7 +83,7 @@ def compile_with_nuitka(
     if cache is not None:
         try:
             if cache_key in cache:
-                return cast(tuple[BuildFile, BuildFile], cache[cache_key])
+                return cast("tuple[BuildFile, BuildFile]", cache[cache_key])
 
         except Exception as e:
             if logger:
@@ -105,7 +91,7 @@ def compile_with_nuitka(
             # 继续执行编译流程
 
     if logger:
-        logger.info(f"× 缓存未命中，开始编译: {full_path.name}")
+        logger.info(f"× 缓存未命中, 开始编译: {full_path.name}")
 
     with TemporaryDirectory() as temp_dir:
         output_dir = build_dir if build_dir else Path(temp_dir)
@@ -147,29 +133,31 @@ def compile_with_nuitka(
                 case _:
                     pyd_match = re.search(r"^Nuitka: Successfully created '.+?([^\\/]+?.so)'", line)
 
-            if pyd_match:
-                pyd_filename = pyd_match.group(1)
-                pyd_path = output_dir / pyd_filename
-                pyi_path = output_dir / full_path.with_suffix(".pyi").name
+            if not pyd_match:
+                continue
 
-                if not pyi_path.exists():
-                    raise FileNotFoundError(f"生成的.pyi文件不存在: {pyi_path}")
+            pyd_filename = pyd_match.group(1)
+            pyd_path = output_dir / pyd_filename
+            pyi_path = output_dir / full_path.with_suffix(".pyi").name
 
-                pyd_file = BuildFile(full_path=pyd_path, rel_path=rel_path.with_name(pyd_path.name))
-                pyi_file = BuildFile(full_path=pyi_path, rel_path=rel_path.with_name(pyi_path.name))
+            if not pyi_path.exists():
+                raise FileNotFoundError(f"生成的.pyi文件不存在: {pyi_path}")
 
-                # 将编译结果存入缓存
-                if cache is not None:
-                    try:
-                        cache[cache_key] = pyd_file, pyi_file
-                        if logger:
-                            logger.info(f"✓ 已缓存编译结果: {full_path.name}")
+            pyd_file = BuildFile(full_path=pyd_path, rel_path=rel_path.with_name(pyd_path.name))
+            pyi_file = BuildFile(full_path=pyi_path, rel_path=rel_path.with_name(pyi_path.name))
 
-                    except Exception as e:
-                        if logger:
-                            logger.warning(f"缓存存储失败: {e}")
+            # 将编译结果存入缓存
+            if cache is not None:
+                try:
+                    cache[cache_key] = pyd_file, pyi_file
+                    if logger:
+                        logger.info(f"✓ 已缓存编译结果: {full_path.name}")
 
-                return pyd_file, pyi_file
+                except Exception as e:
+                    if logger:
+                        logger.warning(f"缓存存储失败: {e}")
+
+            return pyd_file, pyi_file
 
         # 如果没有找到成功创建的消息,抛出错误
         error_msg = f"Nuitka编译失败\n{' '.join(cmd)}"
@@ -196,6 +184,7 @@ class PythonPackager:
             log_level: 日志级别
             cache_dir: 缓存目录,默认为源目录下的.packager_cache
             enable_cache: 是否启用缓存
+
         """
         self.source_dir: Path = Path(source_dir).absolute()
 
@@ -224,6 +213,7 @@ class PythonPackager:
 
         Returns:
             配置好的日志记录器
+
         """
         logger = logging.getLogger("zghmvp-packager")
         logger.setLevel(level)
@@ -245,22 +235,11 @@ class PythonPackager:
     def __del__(self):
         """析构函数,确保缓存正确关闭"""
         if hasattr(self, "cache") and self.cache is not None:
-            try:
+            with suppress(Exception):
                 self.cache.close()
-            except Exception:
-                pass
 
-    def rglob_exclude(self, root: Path, patterns: list[str] | tuple[str, ...] = ("*",), exclude_files: list[str] | tuple[str, ...] = ()):
-        """递归查找匹配 pattern 的文件,跳过排除的目录
-
-        Args:
-            root: 起始目录
-            patterns: 文件匹配模式列表
-            exclude_files: 要排除的文件/目录模式
-
-        Yields:
-            匹配的文件路径
-        """
+    def rglob_exclude(self, root: Path, patterns: list[str] | tuple[str, ...] = ("*",), exclude_files: list[str] | tuple[str, ...] = ()) -> Iterator[Path]:
+        """递归查找匹配 pattern 的文件,跳过排除的目录"""
         # 合并默认排除模式和用户自定义排除模式
         default_excludes = ["/venv", "/.venv", "/env", "**/__pycache__", "**/__MACOSX"]
         exclude_dir_patterns = list(set(exclude_files) | set(default_excludes))
@@ -289,16 +268,8 @@ class PythonPackager:
         static_files: list[str] | tuple[str, ...] = (),
         exclude_files: list[str] | tuple[str, ...] = (),
         nuitka_options: list[str] | tuple[str, ...] = (),
-    ):
-        """编译并分类源文件
-
-        Args:
-            rglob_pattern: 文件匹配模式
-            build_dir: 构建输出目录
-            static_files: 静态文件模式列表
-            exclude_files: 排除文件模式列表
-            nuitka_options: Nuitka编译选项
-        """
+    ) -> None:
+        """编译并分类源文件"""
         self.logger.info(f"开始扫描目录: {self.source_dir}")
 
         spec_static = pathspec.GitIgnoreSpec.from_lines(static_files)
@@ -326,7 +297,7 @@ class PythonPackager:
                 total_files += 1
 
                 # 只读取第一行进行标签匹配判断,避免加载整个文件
-                with open(full_path, "r", encoding="utf-8") as f:
+                with full_path.open("r", encoding="utf-8") as f:
                     first_line = f.readline()
 
                 pyd_match = re.search(r"\spyd[\s$]", first_line)
@@ -366,6 +337,7 @@ class PythonPackager:
 
         Returns:
             单个用户的ZIP包或所有用户的ZIP包字典
+
         """
         self.logger.info("开始创建ZIP包")
 
@@ -373,13 +345,13 @@ class PythonPackager:
 
         # 为每个用户创建ZIP包
         for name in self.user_map:
-            # 合并文件:核心文件 + 静态文件 + 用户特定文件
+            # 合并文件: 核心文件 + 静态文件 + 用户特定文件
             file_map = {**self.core_map, **self.static_map, **self.user_map[name]}
 
             io_zip = io.BytesIO()
             with zipfile.ZipFile(io_zip, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-                for hash, file in file_map.items():
-                    if hash in exclude_hashes:
+                for hash_id, file in file_map.items():
+                    if hash_id in exclude_hashes:
                         continue
 
                     zf.writestr(str(file.rel_path), file.data)

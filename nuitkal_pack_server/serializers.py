@@ -1,71 +1,47 @@
 from rest_framework import serializers
 
-from .models import App, ClientVersion
+from .models import App, AppVersion
+
+
+class AppVersionSerializer(serializers.ModelSerializer):
+    """客户端版本序列化器"""
+
+    file_count = serializers.SerializerMethodField()
+
+    total_size = serializers.SerializerMethodField()
+
+    files = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AppVersion
+
+        fields = ("id", "version", "entry_point", "upload_time", "changelog", "is_active", "file_count", "total_size", "created_at", "files")
+
+    def get_file_count(self, obj: AppVersion) -> int:
+        """获取文件数量"""
+        return obj.get_file_count()
+
+    def get_total_size(self, obj: AppVersion) -> int:
+        """获取总文件大小"""
+        return obj.get_total_size()
+
+    def get_files(self, obj: AppVersion) -> list[dict]:
+        """获取所有包含的文件信息"""
+        return obj.get_files()
 
 
 class AppSerializer(serializers.ModelSerializer):
     """应用序列化器"""
 
-    is_available = serializers.BooleanField(read_only=True, help_text="应用是否可用")
+    active_version = serializers.SerializerMethodField()
 
     class Meta:
         model = App
-        fields = [
-            "id",
-            "name",
-            "description",
-            "enable_time",
-            "disable_time",
-            "is_available",
-        ]
-        read_only_fields = [
-            "id",
-            "is_available",
-        ]
 
+        fields = ("id", "name", "description", "enable_time", "disable_time", "active_version", "created_at", "updated_at")
 
-class ClientActiveSerializer(serializers.ModelSerializer):
-    version = serializers.CharField(help_text="版本号", required=True)
+    def get_active_version(self, obj: App) -> dict | None:
+        """获取激活版本"""
+        active_version = obj.get_active_version()
 
-    class Meta:
-        model = ClientVersion
-
-
-class ClientSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ClientVersion
-        fields = "__all__"
-
-
-class ClientUploadSerializer(serializers.ModelSerializer):
-    """版本上传序列化器"""
-
-    class Meta:
-        model = ClientVersion
-        fields = [
-            "app",
-            "version",
-            "file",
-            "entry_point",
-            "changelog",
-            "is_active",
-        ]
-
-    def validate(self, attrs):
-        """验证上传数据"""
-        # 验证 App 是否存在
-        app: App | None = attrs.get("app")
-        if not app:
-            raise serializers.ValidationError({"app": "指定的 App 不存在"})
-
-        # 验证版本是否已存在
-        version = attrs.get("version")
-        if app.client_versions.filter(version=version).exists():
-            raise serializers.ValidationError({"version": f"版本 {version} 在该应用下已存在"})
-
-        # 验证文件格式
-        file = attrs.get("file")
-        if file and not file.name.endswith(".zip"):
-            raise serializers.ValidationError({"file": "仅支持 ZIP 格式的更新包"})
-
-        return attrs
+        return dict(AppVersionSerializer(active_version).data) if active_version else None

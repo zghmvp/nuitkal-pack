@@ -9,10 +9,7 @@ extras_require = {
         "djangorestframework>=3.14",
     ],
     "client": [
-        "tenacity>=9.1.2",
-        "python-benedict>=0.35.0",
-        "packaging>=23.0",
-        "httpx>=0.24.0",
+        "requests>=2.32.3",
         "diskcache>=5.6.3",
         "pathspec>=1.0.3",
     ],
@@ -22,7 +19,7 @@ extras_require = {
 extras_require["all"] = extras_require["server"] + extras_require["client"]
 
 setup(
-    name="zghmvp-client-update",
+    name="zghmvp-nuitkal-pack",
     version="1.0.0",
     author="ZGHMVP",
     description="客户端版本更新和自动分发系统",
