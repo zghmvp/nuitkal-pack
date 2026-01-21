@@ -15,7 +15,6 @@ from typing import Callable, Optional, TypedDict
 from urllib.parse import urljoin, urlparse
 
 import requests
-
 from nuitkal_pack_server.tools import zipfile
 from nuitkal_pack_server.tools.hash_utils import calculate_file_hash
 
@@ -327,7 +326,7 @@ class UpdateClient:
         for file_path in zip_obj.namelist():
             file_name = Path(file_path).name
             file_data = zip_obj.read(file_path)
-            file_hash = calculate_file_hash(BytesIO(file_data))
+            file_hash = calculate_file_hash(file_data)
             file_form = {"file": (file_name, BytesIO(file_data))}
 
             file_manifest[Path(file_path).as_posix()] = file_hash
@@ -341,8 +340,8 @@ class UpdateClient:
                 }
 
         # 3. 检查已存在文件
-        check_files_url = urljoin(self.server_url, f"apps/{self.app_id}/check-files/")
-        response = requests.post(check_files_url, json={"file_hashes": list(file_manifest.keys())}, timeout=self.timeout)
+        check_files_url = urljoin(self.server_url, "apps/check-files/")
+        response = requests.post(check_files_url, json={"file_hashes": list(files.keys())}, timeout=self.timeout)
         response.raise_for_status()
         missing_files = response.json()["missing_files"]
 

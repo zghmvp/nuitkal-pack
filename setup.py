@@ -19,7 +19,7 @@ extras_require = {
 extras_require["all"] = extras_require["server"] + extras_require["client"]
 
 setup(
-    name="zghmvp-nuitkal-pack",
+    name="nuitkal-pack",
     version="1.0.0",
     author="ZGHMVP",
     description="客户端版本更新和自动分发系统",
