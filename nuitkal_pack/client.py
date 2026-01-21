@@ -15,6 +15,7 @@ from typing import Callable, Optional, TypedDict
 from urllib.parse import urljoin, urlparse
 
 import requests
+
 from nuitkal_pack_server.tools import zipfile
 from nuitkal_pack_server.tools.hash_utils import calculate_file_hash
 
@@ -347,7 +348,7 @@ class UpdateClient:
 
         # 4. 上传缺失文件
         upload_url = urljoin(self.server_url, f"apps/{self.app_id}/upload-file/")
-        for hash_id in set(files.keys()) - set(missing_files):
+        for hash_id in missing_files:
             logger.info(f"上传文件: {', '.join(files[hash_id]['relative_path'])}")
 
             try:
