@@ -319,23 +319,42 @@ class UpdateClient:
         """
         # 1. 解压 ZIP 并构建文件清单
         zip_obj = zipfile.ZipFile(zip_file)
-        file_manifest: dict[str, str] = {}
-        upload_url = urljoin(self.server_url, f"apps/{self.app_id}/upload-file/")
-
         logger.info(f"开始解压上传: zip_file={zip_file.name}, total_files={len(zip_obj.namelist())}")
 
+        # 2. 构建文件清单和表单数据
+        file_manifest: dict[str, str] = {}
+        files = {}
         for file_path in zip_obj.namelist():
-            # 2. 上传单个文件
             file_name = Path(file_path).name
-            file_content = BytesIO(zip_obj.read(file_path))
-            files = {"file": (file_name, file_content)}
+            file_data = zip_obj.read(file_path)
+            file_hash = calculate_file_hash(BytesIO(file_data))
+            file_form = {"file": (file_name, BytesIO(file_data))}
+
+            file_manifest[Path(file_path).as_posix()] = file_hash
+
+            if file_hash in files:
+                files[file_hash]["relative_path"].append(file_path)
+            else:
+                files[file_hash] = {
+                    "relative_path": [file_path],
+                    "file_form": file_form,
+                }
+
+        # 3. 检查已存在文件
+        check_files_url = urljoin(self.server_url, f"apps/{self.app_id}/check-files/")
+        response = requests.post(check_files_url, json={"file_hashes": list(file_manifest.keys())}, timeout=self.timeout)
+        response.raise_for_status()
+        missing_files = response.json()["missing_files"]
+
+        # 4. 上传缺失文件
+        upload_url = urljoin(self.server_url, f"apps/{self.app_id}/upload-file/")
+        for hash_id in set(files.keys()) - set(missing_files):
+            logger.info(f"上传文件: {', '.join(files[hash_id]['relative_path'])}")
 
             try:
-                logger.info(f"上传文件: {file_path}")
-                response = requests.post(upload_url, files=files, timeout=self.timeout)
+                response = requests.post(upload_url, files=files[hash_id]["file_form"], timeout=self.timeout)
                 response.raise_for_status()
                 file_id = response.json()["id"]
-                file_manifest[Path(file_path).as_posix()] = file_id
                 logger.info(f"文件上传成功: {file_path} -> file_id={file_id}")
 
             except requests.HTTPError as e:

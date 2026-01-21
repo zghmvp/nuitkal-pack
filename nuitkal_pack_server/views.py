@@ -179,3 +179,18 @@ class AppViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
                 "is_active": is_active,
             },
         )
+
+    @action(detail=False, methods=["post"], url_path="check-files")
+    def check_files(self, request: "Request") -> Response:
+        """检查文件是否存在"""
+        file_hashes = json.loads(request.data.get("file_hashes", "[]"))
+        if not isinstance(file_hashes, list):
+            return Response({"error": "file_hashes 必须是列表"}, status=status.HTTP_400_BAD_REQUEST)
+
+        existing_files = VersionFile.objects.filter(id__in=file_hashes).values_list("id", flat=True)
+        return Response(
+            {
+                "missing_files": list(set(existing_files) - set(file_hashes)),
+                "existing_files": existing_files,
+            }
+        )
