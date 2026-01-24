@@ -190,7 +190,7 @@ class AppViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
         existing_files = VersionFile.objects.filter(id__in=file_hashes).values_list("id", flat=True)
         return Response(
             {
-                "missing_files": list(set(existing_files) - set(file_hashes)),
+                "missing_files": list(set(file_hashes) - set(existing_files)),
                 "existing_files": existing_files,
             }
         )
