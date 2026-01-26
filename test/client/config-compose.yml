@@ -1,0 +1,55 @@
+django:
+  DATABASES:
+    # 使用 postgresql 作为数据库[默认数据库]
+    default:
+      ENGINE: django.db.backends.postgresql
+      NAME: tuke-new
+      USER: root
+      PASSWORD: postgres
+      HOST: localhost
+      PORT: 15432
+
+  CACHES:
+    # Redis配置
+    default:
+      BACKEND: django_redis.cache.RedisCache
+      LOCATION: redis://localhost:6379/0
+      OPTIONS: {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            # "CONNECTION_POOL_KWARGS": {
+            #    "max_connections": 1000,
+            #    "encoding": 'utf-8'
+            # },
+            # "PASSWORD": "foobared" # 如果设置了登录密码，那么这里写密码
+          }
+
+    tuke-cache: 
+        BACKEND: diskcache.DjangoCache
+        LOCATION: ./data/cache
+        TIMEOUT: 300  # Django 中每个键的默认超时设置
+        SHARDS: 8
+        DATABASE_TIMEOUT: 0.010  # 10 毫秒
+        # 每个 DjangoCache 数据库事务的超时时间。
+        "OPTIONS": {
+            "size_limit": 1073741824  # 1 GB
+        }
+
+zghmvp:
+  BROWSER_CDP_灯塔: http://localhost:9222
+  BROWSER_CDP_看板: http://localhost:9222
+  BROWSER_CDP_大象: http://localhost:9222
+
+  # 商简称
+  COMPANY: 
+
+  # 商配置 灯塔 > 配送看板 > 商配送监控看板 > 右击 > 新标签页中打开框架 > 根据地址栏把对应值替换
+  SUPPLIER_ID: 
+  SUPPLIER_NAME: 
+
+  # 下载客诉明细的群ID
+  大象审核群ID: 
+
+  # 数据导出目录
+  FILE_SAVE_DIR: ./data/后台数据导出
+
+

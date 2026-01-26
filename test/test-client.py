@@ -11,15 +11,14 @@ logging.basicConfig(
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from nuitkal_pack.client import UpdateClient
+from nuitkal_pack.client import UpdateManager
 
 # 创建更新器配置
-config = UpdateClient(
-    server_url="http://127.0.0.1:8000/api/v1/nuitkal_pack/",
-    app_id="52358670-fdfd-4794-9365-e4e80321fd37",
+update_manager = UpdateManager(
+    server_url="http://ps.19970128.xyz/api/v1/nuitkal_pack/",
+    app_id="0b034342-e951-4944-af4a-50d428a7e59a",
     local_dir=Path("client"),
 )
-config.check_and_update()
-# config.upload_zip(
-#     version="1.0.3", entry_point="main.py", changelog="", is_active=True, file=Path(r"C:\Users\Administrator\Desktop\tuke-new\dist\lianda.zip"), extract_and_upload=True
-# )
+info = update_manager.check_update()
+print(info)
+update_manager.run_entry_point(info)

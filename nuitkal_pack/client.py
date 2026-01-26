@@ -8,6 +8,8 @@
 
 import json
 import logging
+import subprocess
+import sys
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -74,8 +76,8 @@ class UploadResult:
     is_active: bool
 
 
-class UpdateClient:
-    """增量更新客户端
+class UpdateManager:
+    """更新管理器
 
     提供完整的版本管理和更新功能:
     - 检查服务器更新
@@ -107,7 +109,7 @@ class UpdateClient:
 
         logger.info(f"初始化 UpdateClient: server_url={self.server_url}, app_id={self.app_id}, local_dir={self.local_dir}")
 
-    def check_update_info(self) -> UpdateInfo:
+    def check_update(self) -> UpdateInfo:
         """检查服务器是否有新版本
 
         向服务器查询当前应用的最新版本信息,对比本地版本后返回更新清单。
@@ -168,6 +170,229 @@ class UpdateClient:
             raise requests.Timeout(f"检查更新超时(超过 {self.timeout} 秒)") from err
 
         return update_info
+
+    def download_update(
+        self,
+        update_info: UpdateInfo,
+        progress_callback: Optional[Callable[[str, int, int], None]] = None,
+    ) -> None:
+        """根据更新信息下载所有需要更新的文件
+
+        Args:
+            update_info: 由 check_update_info() 返回的更新信息
+            progress_callback: 下载进度回调函数,接收参数 (文件名, 已下载字节数, 总字节数)
+
+        Raises:
+            requests.HTTPError: 下载文件失败
+            requests.Timeout: 下载超时
+            IOError: 文件写入失败
+
+        Example:
+            >>> client = UpdateClient(...)
+            >>> info = client.check_update_info()
+            >>> if info['need_update']:
+            ...     client.download_update(info, progress_callback=lambda f, d, t: print(f"{f}: {d/t*100:.1f}%"))
+
+        """
+        # 1. 解析服务器基础 URL
+        parsed_url = urlparse(self.server_url)
+        if not parsed_url.scheme:
+            logger.error("服务器 URL 必须包含协议 (如: http:// 或 https://)")
+            raise ValueError("服务器 URL 必须包含协议 (如: http:// 或 https://)")
+        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
+        add_files = update_info.get("add", [])
+        keep_files = update_info.get("keep", [])
+
+        # 2. 下载需要添加的文件
+        for idx, file_info in enumerate(add_files, 1):
+            download_url = urljoin(base_url, file_info["url"])
+            target_path = self.local_dir / file_info["path"]
+            logger.info(f"[{idx}/{len(add_files)}] 下载新增文件: {file_info['path']}")
+            # 下载并显示进度
+            self._download_file_with_progress(url=download_url, target_path=target_path, progress_callback=progress_callback)
+
+        # 3. 更新本地版本配置
+        for file_info in keep_files:
+            # 检查文件MD5是否匹配
+            local_file_path = self.local_dir / file_info["path"]
+            if local_file_path.exists():
+                with local_file_path.open("rb") as f:
+                    local_md5 = calculate_file_hash(f.read())
+                    if local_md5 == file_info["hash"]:
+                        continue
+
+                logger.warning(f"文件 {file_info['path']} 已存在但校验失败，需要更新")
+            else:
+                logger.warning(f"文件 {file_info['path']} 不存在，需要添加")
+
+            # 本地文件与服务器不一致（被本地修改了），或者不存在，需要更新
+            download_url = urljoin(base_url, file_info["url"])
+            self._download_file_with_progress(url=download_url, target_path=local_file_path, progress_callback=progress_callback)
+
+        self.config_manager.save(
+            {
+                "version": update_info["active_version"],
+                "entry_point": update_info["entry_point"],
+            }
+        )
+
+        logger.info(f"更新检查已完成 当前版本: {update_info['active_version']}")
+
+    def check_and_update(
+        self,
+        *,
+        run_entry_point: bool = False,
+        progress_callback: Optional[Callable[[str, int, int], None]] = None,
+    ) -> None:
+        """检查更新并自动下载新版本文件
+
+        Args:
+            run_entry_point: 是否在更新完成后运行入口点
+            progress_callback: 下载进度回调函数,接收参数 (文件名, 已下载字节数, 总字节数)
+                              返回 None 表示跳过进度显示
+
+        Returns:
+            No return value.
+
+        Raises:
+            requests.HTTPError: 下载文件失败
+            requests.Timeout: 下载超时
+            IOError: 文件写入失败
+
+        Example:
+            >>> def show_progress(filename, downloaded, total):
+            ...     pct = downloaded / total * 100 if total > 0 else 0
+            ...     print(f"{filename}: {pct:.1f}%")
+            >>> client = UpdateClient(...)
+            >>> result = client.check_and_update(progress_callback=show_progress)
+
+        """
+        # 1. 检查是否有可用更新``
+        logger.info("开始检查并执行更新")
+        update_info = self.check_update()
+        if update_info["need_update"]:
+            logger.info(f"发现新版本: {update_info['active_version']}, 开始下载更新")
+        self.download_update(update_info, progress_callback)
+
+        if run_entry_point:
+            self.run_entry_point(update_info)
+
+    def _extract_error_message(self, error: requests.HTTPError, default_msg: str) -> str:
+        """从 HTTP 错误中提取错误信息
+
+        Args:
+            error: HTTP 错误对象
+            default_msg: 默认错误消息
+
+        Returns:
+            提取的错误信息
+
+        """
+        try:
+            error_data = error.response.json()
+            return error_data.get("error", error_data.get("message", default_msg))
+        except Exception:
+            return error.response.text if error.response.text else default_msg
+
+    def _download_file_with_progress(
+        self,
+        url: str,
+        target_path: Path,
+        progress_callback: Optional[Callable[[str, int, int], None]] = None,
+    ) -> None:
+        """下载单个文件并显示进度
+
+        Args:
+            url: 下载 URL
+            target_path: 目标保存路径
+            progress_callback: 进度回调函数
+
+        Raises:
+            requests.HTTPError: 下载失败
+            IOError: 文件写入失败
+
+        """
+        # 1. 创建目标目录
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        file_name = target_path.name
+
+        logger.info(f"开始下载文件: {file_name}, url={url}, target={target_path}")
+
+        # 2. 流式下载文件
+        response = requests.get(url, stream=True, timeout=self.timeout)
+        response.raise_for_status()
+
+        total_size = int(response.headers.get("content-length", 0))
+        downloaded_size = 0
+
+        logger.info(f"文件大小: {total_size} bytes")
+
+        # 3. 写入文件并报告进度
+        with target_path.open("wb") as file_handle:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:  # 过滤掉保持活动的新块
+                    file_handle.write(chunk)
+                    downloaded_size += len(chunk)
+
+                    # 调用进度回调
+                    if progress_callback:
+                        progress_callback(file_name, downloaded_size, total_size)
+
+        logger.info(f"文件下载完成: {file_name}, size={downloaded_size} bytes")
+
+    def run_entry_point(self, update_info: UpdateInfo) -> None:
+        """运行应用入口点"""
+        entry_point = update_info["entry_point"]
+        entry_point_full_path = self.local_dir / entry_point
+        if not entry_point_full_path.exists():
+            logger.error(f"入口点文件不存在: {entry_point_full_path}")
+            raise ValueError(f"入口点文件不存在: {entry_point_full_path}")
+
+        suffix = entry_point_full_path.suffix.lower()
+        match suffix:
+            case ".py" | ".pyw":
+                # match platform.system():
+                #     case "Windows":
+                #         python_path = Path(sys.executable).parent / "python.exe"
+                #     case _:
+                #         python_path = Path(sys.executable).parent / "python"
+                subprocess.run(  # noqa
+                    [sys.executable, entry_point, *sys.argv[1:]],
+                    cwd=self.local_dir,
+                    shell=True,
+                    check=True,
+                )
+            case _:
+                subprocess.run(  # noqa
+                    [entry_point, *sys.argv[1:]],
+                    shell=True,
+                    cwd=self.local_dir,
+                    check=True,
+                )
+        logger.info(f"入口点 {entry_point} 运行完成")
+
+
+class UploadManager:
+    """上传管理器"""
+
+    def __init__(
+        self,
+        server_url: str,
+        app_id: str,
+        timeout: int = 30,
+    ):
+        """初始化上传管理器
+
+        Args:
+            server_url: 服务器基础 URL (如: http://localhost:8000/api/v1/)
+            app_id: 应用唯一标识符 (UUID)
+            timeout: 网络请求超时时间(秒)
+
+        """
+        self.server_url = server_url + ("" if server_url.endswith("/") else "/")
+        self.app_id = app_id
+        self.timeout = timeout
 
     def upload_zip(
         self,
@@ -393,167 +618,3 @@ class UpdateClient:
             error_msg = self._extract_error_message(e, "版本创建失败")
             logger.exception(f"版本创建失败: {error_msg}")
             raise requests.HTTPError(error_msg) from e
-
-    def _extract_error_message(self, error: requests.HTTPError, default_msg: str) -> str:
-        """从 HTTP 错误中提取错误信息
-
-        Args:
-            error: HTTP 错误对象
-            default_msg: 默认错误消息
-
-        Returns:
-            提取的错误信息
-
-        """
-        try:
-            error_data = error.response.json()
-            return error_data.get("error", error_data.get("message", default_msg))
-        except Exception:
-            return error.response.text if error.response.text else default_msg
-
-    def check_and_update(
-        self,
-        progress_callback: Optional[Callable[[str, int, int], None]] = None,
-    ) -> Optional[UpdateInfo]:
-        """检查更新并自动下载新版本文件
-
-        Args:
-            progress_callback: 下载进度回调函数,接收参数 (文件名, 已下载字节数, 总字节数)
-                              返回 None 表示跳过进度显示
-
-        Returns:
-            UpdateInfo: 更新信息字典,如果无需更新则返回 None
-
-        Raises:
-            requests.HTTPError: 下载文件失败
-            requests.Timeout: 下载超时
-            IOError: 文件写入失败
-
-        Example:
-            >>> def show_progress(filename, downloaded, total):
-            ...     pct = downloaded / total * 100 if total > 0 else 0
-            ...     print(f"{filename}: {pct:.1f}%")
-            >>> client = UpdateClient(...)
-            >>> result = client.check_and_update(progress_callback=show_progress)
-
-        """
-        # 1. 检查是否有可用更新
-        logger.info("开始检查并执行更新")
-        update_info = self.check_update_info()
-        if update_info["need_update"]:
-            logger.info(f"发现新版本: {update_info['active_version']}, 开始下载更新")
-        self.download_update(update_info, progress_callback)
-
-    def _download_file_with_progress(
-        self,
-        url: str,
-        target_path: Path,
-        progress_callback: Optional[Callable[[str, int, int], None]] = None,
-    ) -> None:
-        """下载单个文件并显示进度
-
-        Args:
-            url: 下载 URL
-            target_path: 目标保存路径
-            progress_callback: 进度回调函数
-
-        Raises:
-            requests.HTTPError: 下载失败
-            IOError: 文件写入失败
-
-        """
-        # 1. 创建目标目录
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        file_name = target_path.name
-
-        logger.info(f"开始下载文件: {file_name}, url={url}, target={target_path}")
-
-        # 2. 流式下载文件
-        response = requests.get(url, stream=True, timeout=self.timeout)
-        response.raise_for_status()
-
-        total_size = int(response.headers.get("content-length", 0))
-        downloaded_size = 0
-
-        logger.info(f"文件大小: {total_size} bytes")
-
-        # 3. 写入文件并报告进度
-        with target_path.open("wb") as file_handle:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:  # 过滤掉保持活动的新块
-                    file_handle.write(chunk)
-                    downloaded_size += len(chunk)
-
-                    # 调用进度回调
-                    if progress_callback:
-                        progress_callback(file_name, downloaded_size, total_size)
-
-        logger.info(f"文件下载完成: {file_name}, size={downloaded_size} bytes")
-
-    def download_update(
-        self,
-        update_info: UpdateInfo,
-        progress_callback: Optional[Callable[[str, int, int], None]] = None,
-    ) -> None:
-        """根据更新信息下载所有需要更新的文件
-
-        Args:
-            update_info: 由 check_update_info() 返回的更新信息
-            progress_callback: 下载进度回调函数,接收参数 (文件名, 已下载字节数, 总字节数)
-
-        Raises:
-            requests.HTTPError: 下载文件失败
-            requests.Timeout: 下载超时
-            IOError: 文件写入失败
-
-        Example:
-            >>> client = UpdateClient(...)
-            >>> info = client.check_update_info()
-            >>> if info['need_update']:
-            ...     client.download_update(info, progress_callback=lambda f, d, t: print(f"{f}: {d/t*100:.1f}%"))
-
-        """
-        # 1. 解析服务器基础 URL
-        parsed_url = urlparse(self.server_url)
-        if not parsed_url.scheme:
-            logger.error("服务器 URL 必须包含协议 (如: http:// 或 https://)")
-            raise ValueError("服务器 URL 必须包含协议 (如: http:// 或 https://)")
-        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
-
-        add_files = update_info.get("add", [])
-        keep_files = update_info.get("keep", [])
-
-        # 2. 下载需要添加的文件
-        for idx, file_info in enumerate(add_files, 1):
-            download_url = urljoin(base_url, file_info["url"])
-            target_path = self.local_dir / file_info["path"]
-            logger.info(f"[{idx}/{len(add_files)}] 下载新增文件: {file_info['path']}")
-            # 下载并显示进度
-            self._download_file_with_progress(url=download_url, target_path=target_path, progress_callback=progress_callback)
-
-        # 3. 更新本地版本配置
-        for file_info in keep_files:
-            # 检查文件MD5是否匹配
-            local_file_path = self.local_dir / file_info["path"]
-            if local_file_path.exists():
-                with local_file_path.open("rb") as f:
-                    local_md5 = calculate_file_hash(f.read())
-                    if local_md5 == file_info["hash"]:
-                        continue
-
-                logger.warning(f"文件 {file_info['path']} 已存在但校验失败，需要更新")
-            else:
-                logger.warning(f"文件 {file_info['path']} 不存在，需要添加")
-
-            # 本地文件与服务器不一致（被本地修改了），或者不存在，需要更新
-            download_url = urljoin(base_url, file_info["url"])
-            self._download_file_with_progress(url=download_url, target_path=local_file_path, progress_callback=progress_callback)
-
-        self.config_manager.save(
-            {
-                "version": update_info["active_version"],
-                "entry_point": update_info["entry_point"],
-            }
-        )
-
-        logger.info(f"更新检查已完成 当前版本: {update_info['active_version']}")
