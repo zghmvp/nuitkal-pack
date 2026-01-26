@@ -15,7 +15,7 @@ from nuitkal_pack.client import UpdateManager
 
 # 创建更新器配置
 update_manager = UpdateManager(
-    server_url="http://ps.19970128.xyz/api/v1/nuitkal_pack/",
+    server_url="http://127.0.0.1:8000/api/v1/nuitkal_pack/",
     app_id="0b034342-e951-4944-af4a-50d428a7e59a",
     local_dir=Path("client"),
 )
