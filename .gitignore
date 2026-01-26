@@ -1,5 +1,6 @@
 test/server/media/
 test/server/db.sqlite3
+test/client/
 
 # Python
 __pycache__/
