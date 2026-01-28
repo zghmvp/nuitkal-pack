@@ -12,6 +12,7 @@ extras_require = {
         "requests>=2.32.3",
         "diskcache>=5.6.3",
         "pathspec>=1.0.3",
+        "nuitka>=2.8.9",
     ],
 }
 
