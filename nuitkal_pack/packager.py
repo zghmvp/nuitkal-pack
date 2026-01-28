@@ -13,7 +13,6 @@ import subprocess
 import sys
 import zipfile
 from collections import defaultdict
-from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -57,10 +56,15 @@ def calculate_hash(file_path: Path | bytes | str, buffer_size: int = 65536) -> s
 class BuildFile:
     full_path: Path
     rel_path: Path
+    jump_first: bool = False
 
     def __post_init__(self):
+        with self.full_path.open("rb") as f:
+            if self.jump_first:
+                next(f)
+            self.data = f.read()
+
         self.name = self.rel_path.name
-        self.data = self.full_path.read_bytes()
         self.file_hash = calculate_hash(self.data)  # 文件哈希
         self.identity_hash = calculate_hash(f"{self.rel_path.as_posix()}:{self.file_hash}")  # (文件哈希 + 路径)计算出来的唯一哈希
 
@@ -235,8 +239,8 @@ class PythonPackager:
     def __del__(self):
         """析构函数,确保缓存正确关闭"""
         if hasattr(self, "cache") and self.cache is not None:
-            with suppress(Exception):
-                self.cache.close()
+            # with suppress(Exception):
+            self.cache.close()
 
     def rglob_exclude(self, root: Path, patterns: list[str] | tuple[str, ...] = ("*",), exclude_files: list[str] | tuple[str, ...] = ()) -> Iterator[Path]:
         """递归查找匹配 pattern 的文件,跳过排除的目录"""
@@ -312,13 +316,13 @@ class PythonPackager:
 
                 elif core_match:
                     self.logger.info(f"发现核心文件[py]: {rel_path}")
-                    file = BuildFile(full_path, rel_path)
+                    file = BuildFile(full_path, rel_path, jump_first=True)
                     self.core_map[file.identity_hash] = file
 
                 elif user_match:
                     self.logger.info(f"发现用户文件[py]: {rel_path} (用户: {'、'.join(user_match)})")
                     for user_name in user_match:
-                        file = BuildFile(full_path, rel_path)
+                        file = BuildFile(full_path, rel_path, jump_first=True)
                         self.user_map[user_name][file.identity_hash] = file
 
         # 输出编译统计信息
