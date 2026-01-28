@@ -14,6 +14,7 @@ import sys
 import zipfile
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Iterator, MutableMapping, cast, overload
@@ -69,6 +70,7 @@ class BuildFile:
         self.identity_hash = calculate_hash(f"{self.rel_path.as_posix()}:{self.file_hash}")  # (文件哈希 + 路径)计算出来的唯一哈希
 
 
+@cache
 def compile_with_nuitka(
     full_path: Path,
     rel_path: Path,
@@ -192,9 +194,9 @@ class PythonPackager:
         """
         self.source_dir: Path = Path(source_dir).absolute()
 
-        self.core_map: MutableMapping[str, BuildFile] = {}
-        self.static_map: MutableMapping[str, BuildFile] = {}
-        self.user_map: MutableMapping[str, MutableMapping[str, BuildFile]] = defaultdict(dict)
+        self.core_map: MutableMapping[str, list[BuildFile]] = defaultdict(list)
+        self.static_map: MutableMapping[str, list[BuildFile]] = defaultdict(list)
+        self.user_map: MutableMapping[str, MutableMapping[str, list[BuildFile]]] = defaultdict(dict)
 
         # 初始化日志
         self.logger = self._setup_logger(log_level)
@@ -276,10 +278,17 @@ class PythonPackager:
         """编译并分类源文件"""
         self.logger.info(f"开始扫描目录: {self.source_dir}")
 
-        spec_static = pathspec.GitIgnoreSpec.from_lines(static_files)
+        def _compile_file(mode: str, full_path: Path, rel_path: Path, *, jump_first: bool = False) -> Iterator[BuildFile]:
+            if mode == "pyd":
+                self.logger.info(f"编译[pyd]: {rel_path}")
+                pyd_file, pyi_file = compile_with_nuitka(full_path, rel_path, build_dir=build_dir, options=nuitka_options, cache=self.cache, logger=self.logger)
+                yield pyd_file
+                yield pyi_file
+            else:
+                self.logger.info(f"打包[py]: {rel_path}")
+                yield BuildFile(full_path, rel_path, jump_first=jump_first)
 
-        # 用于统计编译信息
-        total_files = 0
+        spec_static = pathspec.GitIgnoreSpec.from_lines(static_files)
 
         # 排除缓存目录
         if self.cache:
@@ -288,45 +297,35 @@ class PythonPackager:
 
         for full_path in self.rglob_exclude(self.source_dir, rglob_pattern, exclude_files):
             rel_path = full_path.relative_to(self.source_dir)
+            rel_path_str = rel_path.as_posix()
 
             # 处理静态文件
             if spec_static.match_file(rel_path):
                 self.logger.info(f"发现静态文件: {rel_path}")
                 file = BuildFile(full_path, rel_path)
-                self.static_map[file.identity_hash] = file
-                continue
+                self.static_map[rel_path_str].append(file)
 
             # 处理Python文件
-            if full_path.suffix == ".py":
-                total_files += 1
-
+            elif full_path.suffix == ".py":
                 # 只读取第一行进行标签匹配判断,避免加载整个文件
                 with full_path.open("r", encoding="utf-8") as f:
                     first_line = f.readline()
 
-                pyd_match = re.search(r"\spyd[\s$]", first_line)
-                core_match = re.search(r"\score[\s$]", first_line)
-                user_match = re.findall(r"\suser-(.+?)(?=\s|$)", first_line)
+                core_match = re.search(r"\[core(?:-(pyd|source))?\]", first_line)
+                core_mode = (core_match.group(1) if core_match else None) or "source"
+                user_match = re.findall(r"\[user-(\w+)(?:-(pyd|source))?\]", first_line)
 
-                if pyd_match:
-                    self.logger.info(f"发现编译文件[pyd]: {rel_path}")
-                    pyd_file, pyi_file = compile_with_nuitka(full_path, rel_path, build_dir=build_dir, options=nuitka_options, cache=self.cache, logger=self.logger)
-                    self.core_map[pyd_file.identity_hash] = pyd_file
-                    self.core_map[pyi_file.identity_hash] = pyi_file
+                if user_match:
+                    for user_name, mode in user_match:
+                        for file in _compile_file(mode if mode else core_mode, full_path, rel_path, jump_first=True):
+                            self.user_map[user_name].setdefault(rel_path_str, []).append(file)
 
-                elif core_match:
-                    self.logger.info(f"发现核心文件[py]: {rel_path}")
-                    file = BuildFile(full_path, rel_path, jump_first=True)
-                    self.core_map[file.identity_hash] = file
-
-                elif user_match:
-                    self.logger.info(f"发现用户文件[py]: {rel_path} (用户: {'、'.join(user_match)})")
-                    for user_name in user_match:
-                        file = BuildFile(full_path, rel_path, jump_first=True)
-                        self.user_map[user_name][file.identity_hash] = file
+                if core_match:
+                    for file in _compile_file(core_mode, full_path, rel_path, jump_first=True):
+                        self.core_map[rel_path_str].append(file)
 
         # 输出编译统计信息
-        self.logger.info(f"编译完成: 共编译 {total_files} 个Python文件")
+        self.logger.info("编译完成")
 
     @overload
     def to_zip(self, user_name: str) -> io.BytesIO: ...
@@ -354,11 +353,12 @@ class PythonPackager:
 
             io_zip = io.BytesIO()
             with zipfile.ZipFile(io_zip, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-                for hash_id, file in file_map.items():
-                    if hash_id in exclude_hashes:
-                        continue
+                for rel_path, file_list in file_map.items():
+                    for file in file_list:
+                        if file.identity_hash in exclude_hashes:
+                            continue
 
-                    zf.writestr(str(file.rel_path), file.data)
+                        zf.writestr(str(file.rel_path), file.data)
 
             # 重置指针以便后续读取
             io_zip.seek(0)
