@@ -26,6 +26,24 @@ from .config import ConfigManager
 logger = logging.getLogger(__name__)
 
 
+def _extract_error_message(error: requests.HTTPError, default_msg: str) -> str:
+    """从 HTTP 错误中提取错误信息
+
+    Args:
+        error: HTTP 错误对象
+        default_msg: 默认错误消息
+
+    Returns:
+        提取的错误信息
+
+    """
+    try:
+        error_data = error.response.json()
+        return error_data.get("error", error_data.get("message", default_msg))
+    except Exception:
+        return error.response.text if error.response.text else default_msg
+
+
 class FileInfo(TypedDict):
     hash: str
     path: str
@@ -278,23 +296,6 @@ class UpdateManager:
         if run_entry_point:
             self.run_entry_point(update_info)
 
-    def _extract_error_message(self, error: requests.HTTPError, default_msg: str) -> str:
-        """从 HTTP 错误中提取错误信息
-
-        Args:
-            error: HTTP 错误对象
-            default_msg: 默认错误消息
-
-        Returns:
-            提取的错误信息
-
-        """
-        try:
-            error_data = error.response.json()
-            return error_data.get("error", error_data.get("message", default_msg))
-        except Exception:
-            return error.response.text if error.response.text else default_msg
-
     def _download_file_with_progress(
         self,
         url: str,
@@ -516,7 +517,7 @@ class UploadManager:
             )
 
         except requests.HTTPError as e:
-            error_msg = self._extract_error_message(e, "ZIP 包上传失败")
+            error_msg = _extract_error_message(e, "ZIP 包上传失败")
             logger.exception(f"ZIP 包上传失败: {error_msg}")
             raise requests.HTTPError(error_msg) from e
 
@@ -583,7 +584,7 @@ class UploadManager:
                 logger.info(f"文件上传成功: {file_path} -> file_id={file_id}")
 
             except requests.HTTPError as e:
-                error_msg = self._extract_error_message(e, f"文件上传失败: {file_path}")
+                error_msg = _extract_error_message(e, f"文件上传失败: {file_path}")
                 logger.exception(f"文件上传失败: {file_path}, error={error_msg}")
                 raise requests.HTTPError(error_msg) from e
 
@@ -615,6 +616,6 @@ class UploadManager:
             )
 
         except requests.HTTPError as e:
-            error_msg = self._extract_error_message(e, "版本创建失败")
+            error_msg = _extract_error_message(e, "版本创建失败")
             logger.exception(f"版本创建失败: {error_msg}")
             raise requests.HTTPError(error_msg) from e

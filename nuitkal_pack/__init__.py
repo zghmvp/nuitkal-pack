@@ -1,2 +1,2 @@
-from .client import UpdateManager
+from .client import UpdateManager, UploadManager
 from .packager import PythonPackager
