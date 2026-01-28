@@ -28,6 +28,7 @@ class VersionService:
         if obj:
             return obj
 
+        file.name = hash_id
         obj = VersionFile(id=hash_id, name=name, size=file.size, file=file)
         obj.save()
         return obj
