@@ -192,5 +192,6 @@ class AppViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gene
             {
                 "missing_files": list(set(file_hashes) - set(existing_files)),
                 "existing_files": existing_files,
+                "delete_files": list(set(existing_files) - set(file_hashes)),
             }
         )

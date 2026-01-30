@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import Optional, TypedDict
 
@@ -57,12 +56,8 @@ class ConfigManager:
         """
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
-        data = {
-            "version": config.get("version"),
-            "last_check_time": config.get("last_check_time"),
-        }
         with self.config_file.open("w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+            json.dump(config, f, indent=2, ensure_ascii=False)
 
     def update_version(self, version: str) -> None:
         """更新版本号
@@ -73,5 +68,4 @@ class ConfigManager:
         """
         config = self.load()
         config["version"] = version
-        config["last_check_time"] = datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S")
         self.save(config)

@@ -221,6 +221,7 @@ class UpdateManager:
 
         add_files = update_info.get("add", [])
         keep_files = update_info.get("keep", [])
+        delete_files = update_info.get("delete", [])
 
         # 2. 下载需要添加的文件
         for idx, file_info in enumerate(add_files, 1):
@@ -248,10 +249,17 @@ class UpdateManager:
             download_url = urljoin(base_url, file_info["url"])
             self._download_file_with_progress(url=download_url, target_path=local_file_path, progress_callback=progress_callback)
 
+        for file_info in delete_files:
+            local_file_path = self.local_dir / file_info["path"]
+            if local_file_path.exists():
+                local_file_path.unlink()
+                logger.info(f"删除文件: {file_info['path']}")
+            else:
+                logger.warning(f"文件 {file_info['path']} 不存在，无法删除")
+
         self.config_manager.save(
             {
                 "version": update_info["active_version"],
-                "entry_point": update_info["entry_point"],
             }
         )
 
