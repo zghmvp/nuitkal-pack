@@ -1,7 +1,5 @@
 from setuptools import find_packages, setup
 
-install_requires = []  # 没有通用依赖
-
 # 定义可选依赖组
 extras_require = {
     "server": [
@@ -28,7 +26,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=find_packages(),
     python_requires=">=3.8",
-    install_requires=install_requires,
+    install_requires=extras_require["all"],
     extras_require=extras_require,
     classifiers=[
         "Development Status :: 4 - Beta",
