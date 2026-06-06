@@ -10,18 +10,15 @@
             ],
             "django": true,
             "autoStartBrowser": false,
-            "cwd": "${workspaceFolder}\\test\\server",
-            "program": "manage.py"
+            "cwd": "${workspaceFolder}/test/server",
+            "program": "${workspaceFolder}/test/server/manage.py"
         },
         {
             "name": "Text Client",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}\\test-client.py",
-            "args": [
-                "runserver",
-                "10000"
-            ],
+            "program": "${workspaceFolder}/test/test-client.py",
+            "args": [],
             "console": "integratedTerminal"
         }
     ]

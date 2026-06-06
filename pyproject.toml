@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nuitkal-pack"
+version = "1.0.0"
+description = "客户端版本更新和自动分发系统"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "ZGHMVP"},
+]
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Django",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.optional-dependencies]
+server = [
+    "Django>=4.2",
+    "djangorestframework>=3.14",
+]
+client = [
+    "requests>=2.32.3",
+    "diskcache>=5.6.3",
+    "pathspec>=1.0.3",
+    "nuitka>=2.8.9",
+]
+all = [
+    "Django>=4.2",
+    "djangorestframework>=3.14",
+    "requests>=2.32.3",
+    "diskcache>=5.6.3",
+    "pathspec>=1.0.3",
+    "nuitka>=2.8.9",
+]
+
+[tool.setuptools.packages.find]
+include = ["nuitkal_pack*", "nuitkal_pack_server*"]
+
+[tool.ruff]
+line-length = 88
+indent-width = 4
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ERA001", "S603", "RUF001", "G004", "BLE001", "PLR0913",
+    "PGH004", "TRY003", "ANN204", "D101", "D104", "D105",
+    "SIM103", "UP037", "UP007", "UP006", "UP035", "UP040",
+    "UP045", "D106", "RUF003", "RUF002", "ARG002", "EM102",
+    "EM101", "D400", "D415", "COM812", "COM819", "D100",
+    "D203", "D213", "D300", "E111", "E114", "E117",
+    "ISC001", "ISC002", "PLC0415", "Q000", "Q001", "Q002",
+    "Q003", "W191",
+]
+fixable = ["ALL"]
+unfixable = []
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["INP001", "S101"]
